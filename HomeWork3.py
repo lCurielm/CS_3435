@@ -1,121 +1,197 @@
+#I want to use requests to download the robots file from the website https://ohsnapmacros.com.
+#once i get the robots file i want to print it to the console.
+#after printing the robots file i want to use protego to parse the robots file and get the url of the sitemap_index.xml file.
+#once i have all the url loc tag values from the site map, i need to use a separate function to go to each of those urls and from the content, create a dictionary of 
+#the meta description, title, and h1 tag values.
+#so far, this code gets the robots.txt file, extracts the sitemap_index.xml url, downloads the sitemap index, and prints the first sitemap url.
+#i also have it able to parse the first sitemap to get all the <loc> urls and print the total number of <loc> urls found in the first site map.
+
 import requests
-from bs4 import BeautifulSoup
 from protego import Protego
-from urllib.parse import urlparse, urljoin
-import sys
-import json
-import os
+from bs4 import BeautifulSoup
+import urllib.robotparser
 
-HEADERS = {}
+# This function orchestrates the process:
+# 1. Downloads robots.txt from the target URL.
+# 2. Parses robots.txt to find sitemap URLs.
+# 3. Extracts the sitemap_index.xml URL.
+# 4. Downloads the sitemap index and gets the first sitemap URL.
+# 5. Parses the first sitemap to get all <loc> URLs.
+def get_sitemap_url_from_robots(target_url):
+    robots_txt = download_robots_txt(target_url)
+    if not robots_txt:
+        print("Could not download robots.txt")
+        return None
+    robot_parser = Protego.parse(robots_txt)
+    sitemaps = list(robot_parser.sitemaps)
+    if sitemaps:
+        var_sitemap_url = extract_sitemap_index_url(robots_txt)        
+        print("Sitemap URL found:", var_sitemap_url)
 
-def get_robot_parser(base_url: str) -> Protego:
-    global HEADERS
-    user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36'
-    HEADERS = {'User-Agent': user_agent}
-    response = requests.get(base_url + "/robots.txt", headers=HEADERS)
-    assert response.text.strip() != "", "robots.txt is empty!"
-    robot_parser = Protego.parse(response.text)
-    return robot_parser
+        var_the_first_sitemap = download_sitemap_index(var_sitemap_url)
+        print("First sitemap URL from sitemap index:", var_the_first_sitemap)    
 
-def can_fetch_url(robot_parser, url):
-    return robot_parser.can_fetch(url, HEADERS['User-Agent'])
+        # Now parse the first sitemap to get all <loc> URLs  
+        loc_list = parse_sitemap_locs(var_the_first_sitemap)
+        print(f"Total <loc> URLs found: {len(loc_list)}")  
 
-def get_index_links(index_url):
-    response = requests.get(index_url, headers=HEADERS)
-    soup = BeautifulSoup(response.text, 'xml')
-    links = []
-    for loc in soup.find_all('loc'):
-        href = loc.text.strip()
-        # Filter for recipe pages (adjust if needed)
-        if '/recipes/' in href or '/recipe/' in href:
-            links.append(href)
-    return links
-
-def load_scraped_urls(json_lines_file):
-    scraped = set()
-    if os.path.exists(json_lines_file):
-        with open(json_lines_file, 'r') as fp:
-            for line in fp:
-                try:
-                    data = json.loads(line)
-                    scraped.add(data['url'])
-                except Exception:
-                    continue
-    return scraped
-
-def scrape_item_page(url):
-    response = requests.get(url, headers=HEADERS)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    # Extract attributes
-    title = soup.title.string if soup.title else ""
-    entry_title = soup.find(class_='entry-title')
-    entry_title = entry_title.get_text(strip=True) if entry_title else ""
-    # Ingredients (may be in a list or div, adjust selector as needed)
-    ingredients = []
-    ing_section = soup.find(class_='wprm-recipe-ingredients-container')
-    if ing_section:
-        for ing in ing_section.find_all(class_='wprm-recipe-ingredient'):
-            ingredients.append(ing.get_text(strip=True))
-    # Instructions
-    instructions = []
-    inst_section = soup.find(class_='wprm-recipe-instructions-container')
-    if inst_section:
-        for step in inst_section.find_all(class_='wprm-recipe-instruction-text'):
-            instructions.append(step.get_text(strip=True))
-    # Servings
-    servings = ""
-    servings_tag = soup.find(class_='wprm-recipe-servings')
-    if servings_tag:
-        servings = servings_tag.get_text(strip=True)
-    # Cook time
-    cook_time = ""
-    cook_time_tag = soup.find(class_='wprm-recipe-time')
-    if cook_time_tag:
-        cook_time = cook_time_tag.get_text(strip=True)
-    # Macros (may be in a table or div, adjust selector as needed)
-    macros = {}
-    macro_section = soup.find(class_='wprm-nutrition-label-container')
-    if macro_section:
-        for row in macro_section.find_all('span', class_='wprm-nutrition-label-text'):
-            label = row.get_text(strip=True)
-            value = row.find_next_sibling('span')
-            if value:
-                macros[label] = value.get_text(strip=True)
-    data = {
-        "url": url,
-        "title": title,
-        "entry_title": entry_title,
-        "ingredients": ingredients,
-        "instructions": instructions,
-        "servings": servings,
-        "cook_time": cook_time,
-        "macros": macros
-    }
-    return data
-
-def main(base_url, index_url, json_lines_file):
-    robot_parser = get_robot_parser(base_url)
-    scraped_urls = load_scraped_urls(json_lines_file)
-    item_links = get_index_links(index_url)
-    for url in item_links:
-        if url in scraped_urls:
-            print(f"Already scraped: {url}")
-            continue
-        if not can_fetch_url(robot_parser, url):
-            print(f"Cannot fetch (robots.txt): {url}")
-            continue
-        print(f"Scraping: {url}")
-        data = scrape_item_page(url)
-        # Only save if at least 7 attributes are present (adjust as needed)
-        if len(data) >= 7:
-            with open(json_lines_file, 'a', encoding='utf-8') as fp:
-                fp.write(json.dumps(data, ensure_ascii=False) + '\n')
-
-if __name__ == '__main__':
-    if len(sys.argv) != 4:
-        print("Usage: python HomeWork3.py <base_url> <index_url> <json_lines_file>")
+        return var_sitemap_url
     else:
-        main(sys.argv[1], sys.argv[2], sys.argv[3])
+        print("No sitemap URL found in robots.txt")
+        return None
 
 
+# This function parses the robots.txt content and extracts the sitemap_index.xml URL if present.
+def extract_sitemap_index_url(robots_txt):
+    """
+    Extracts the sitemap_index.xml URL from the robots.txt content.
+    Returns the URL as a string if found, otherwise None.
+    """
+    robot_parser = Protego.parse(robots_txt)
+    sitemaps = list(robot_parser.sitemaps)
+    for sitemap_url in sitemaps:
+        if "sitemap_index.xml" in sitemap_url:
+            print("sitemap_index.xml URL found:", sitemap_url)
+            return sitemap_url
+    print("No sitemap_index.xml URL found in robots.txt")
+    return None
 
+
+# This function downloads the robots.txt file from the specified URL and prints its contents.
+def download_robots_txt(url="https://ohsnapmacros.com/robots.txt"):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
+    }
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        print(response.content.decode('utf-8'))
+        return response.text
+    except requests.RequestException as e:
+        print(f"Error downloading robots.txt: {e}")
+        return None
+    
+    
+# This function downloads the sitemap index XML from the given URL,
+# parses it, and returns the first sitemap URL found.
+def download_sitemap_index(sitemap_url):
+    """
+    Downloads the sitemap.xml (or sitemap index) from the given URL and returns a list of sitemap URLs.
+    """
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
+    }
+    try:
+        response = requests.get(sitemap_url, headers=headers)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, "xml")
+        sitemap_tags = soup.find_all("loc")
+        sitemap_list = [tag.text for tag in sitemap_tags]
+        print(f"Found {len(sitemap_list)} sitemap URLs in the download_sitemap_index.")
+        return sitemap_list[0] if sitemap_list else None
+    except requests.RequestException as e:
+        print(f"Error downloading sitemap index: {e}")
+        return []
+
+# This function downloads a sitemap XML from the given URL,
+# parses it, and returns a list of all <loc> tag elements found.
+def parse_sitemap_locs(sitemap_url):
+    """
+    Downloads the sitemap at the given URL and returns a list of all <loc> URL strings found.
+    """
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
+    }
+    try:
+        response = requests.get(sitemap_url, headers=headers)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, "xml")        
+        loc_tags = []
+        for url_tag in soup.find_all("url"):
+            loc = url_tag.find("loc")
+            if loc:
+                loc_tags.append(loc.text)
+        print(f"Found {len(loc_tags)} <loc> URLs in the sitemap with parse_sitemap_locs.")
+        return loc_tags
+    except requests.RequestException as e:
+        print(f"Error downloading or parsing sitemap: {e}")
+        return []
+    
+
+def extract_recipe_data(page_url):
+    """
+    Downloads the page and extracts recipe information such as servings, prep time, cook time, ingredients, instructions, notes, and nutrition.
+    Returns a dictionary with the extracted data.
+    """
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
+    }
+    try:
+        response = requests.get(page_url, headers=headers)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, "html.parser")
+        recipe = {}
+
+        # Title (usually in <h1>)
+        recipe['title'] = soup.find('h1').get_text(strip=True) if soup.find('h1') else None
+
+        # Servings
+        servings = soup.find(class_="wprm-recipe-servings")
+        recipe['servings'] = servings.get_text(strip=True) if servings else None
+
+        # Prep time
+        prep_time = soup.find(class_="wprm-recipe-prep-time")
+        recipe['prep_time'] = prep_time.get_text(strip=True) if prep_time else None
+
+        # Cook time
+        cook_time = soup.find(class_="wprm-recipe-cook-time")
+        recipe['cook_time'] = cook_time.get_text(strip=True) if cook_time else None
+
+        # Ingredients
+        ingredients_list = []
+        ingredients_ul = soup.find("ul", class_="wprm-recipe-ingredients")
+        if ingredients_ul:
+            for li in ingredients_ul.find_all("li"):
+                ingredients_list.append(li.get_text(strip=True))
+        recipe['ingredients'] = ingredients_list
+
+        # Instructions
+        instructions_list = []
+        instructions_ul = soup.find("ul", class_="wprm-recipe-instructions")
+        if instructions_ul:
+            for li in instructions_ul.find_all("li"):
+                instructions_list.append(li.get_text(strip=True))
+        recipe['instructions'] = instructions_list
+
+        # Notes
+        notes_div = soup.find("div", class_="wprm-recipe-notes")
+        notes = []
+        if notes_div:
+            for li in notes_div.find_all("li"):
+                notes.append(li.get_text(strip=True))
+            # If notes are not in <li>, get the text directly
+            if not notes and notes_div.get_text(strip=True):
+                notes.append(notes_div.get_text(strip=True))
+        recipe['notes'] = notes
+
+        # Nutrition
+        nutrition_div = soup.find("div", class_="wprm-recipe-nutrition")
+        recipe['nutrition'] = nutrition_div.get_text(strip=True) if nutrition_div else None
+
+        return recipe
+    except Exception as e:
+        print(f"Error extracting recipe from {page_url}: {e}")
+        return {}
+
+
+if __name__ == "__main__":
+    # Get the first sitemap URL from robots.txt
+    sitemap_url = get_sitemap_url_from_robots(target_url="https://ohsnapmacros.com/robots.txt")
+    if sitemap_url:
+        # Get all <loc> URLs from the first sitemap
+        loc_list = parse_sitemap_locs(sitemap_url)
+        # Iterate over the first 5 URLs (change to 100 for full test)
+        for url in loc_list[:5]:
+            print(f"\nExtracting recipe from: {url}")
+            recipe_data = extract_recipe_data(url)
+            print(recipe_data)

@@ -12,6 +12,12 @@ from protego import Protego
 from bs4 import BeautifulSoup
 import urllib.robotparser
 
+# This function orchestrates the process:
+# 1. Downloads robots.txt from the target URL.
+# 2. Parses robots.txt to find sitemap URLs.
+# 3. Extracts the sitemap_index.xml URL.
+# 4. Downloads the sitemap index and gets the first sitemap URL.
+# 5. Parses the first sitemap to get all <loc> URLs.
 def get_sitemap_url_from_robots(target_url):
     robots_txt = download_robots_txt(target_url)
     if not robots_txt:
@@ -35,6 +41,8 @@ def get_sitemap_url_from_robots(target_url):
         print("No sitemap URL found in robots.txt")
         return None
 
+
+# This function parses the robots.txt content and extracts the sitemap_index.xml URL if present.
 def extract_sitemap_index_url(robots_txt):
     """
     Extracts the sitemap_index.xml URL from the robots.txt content.
@@ -49,6 +57,8 @@ def extract_sitemap_index_url(robots_txt):
     print("No sitemap_index.xml URL found in robots.txt")
     return None
 
+
+# This function downloads the robots.txt file from the specified URL and prints its contents.
 def download_robots_txt(url="https://ohsnapmacros.com/robots.txt"):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
@@ -61,7 +71,10 @@ def download_robots_txt(url="https://ohsnapmacros.com/robots.txt"):
     except requests.RequestException as e:
         print(f"Error downloading robots.txt: {e}")
         return None
-
+    
+    
+# This function downloads the sitemap index XML from the given URL,
+# parses it, and returns the first sitemap URL found.
 def download_sitemap_index(sitemap_url):
     """
     Downloads the sitemap.xml (or sitemap index) from the given URL and returns a list of sitemap URLs.
@@ -81,6 +94,8 @@ def download_sitemap_index(sitemap_url):
         print(f"Error downloading sitemap index: {e}")
         return []
 
+# This function downloads a sitemap XML from the given URL,
+# parses it, and returns a list of all <loc> tag elements found.
 def parse_sitemap_locs(sitemap_url):
     """
     Downloads the sitemap at the given URL and returns a list of all <loc> values found.
