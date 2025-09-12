@@ -93,6 +93,10 @@ def download_sitemap_index(sitemap_url):
         print(f"Error downloading sitemap index: {e}")
         return []
 
+
+
+
+
 # This function downloads a sitemap XML from the given URL,
 # parses it, and returns a list of all <loc> tag elements found.
 def parse_sitemap_locs(sitemap_url):
@@ -184,14 +188,36 @@ def extract_recipe_data(page_url):
         return {}
 
 
+def print_recipe(recipe):
+    print("\n--- Recipe ---")
+    print(f"Title: {recipe.get('title', 'N/A')}")
+    print(f"Servings: {recipe.get('servings', 'N/A')}")
+    print(f"Prep Time: {recipe.get('prep_time', 'N/A')}")
+    print(f"Cook Time: {recipe.get('cook_time', 'N/A')}")
+    print("\nIngredients:")
+    for ingredient in recipe.get('ingredients', []):
+        print(f"  - {ingredient}")
+    print("\nInstructions:")
+    for step in recipe.get('instructions', []):
+        print(f"  - {step}")
+    print("\nNotes:")
+    for note in recipe.get('notes', []):
+        print(f"  - {note}")
+    print(f"\nNutrition: {recipe.get('nutrition', 'N/A')}")
+    print("--- End Recipe ---\n")
+
+
 if __name__ == "__main__":
     # Get the first sitemap URL from robots.txt
-    sitemap_url = get_sitemap_url_from_robots(target_url="https://ohsnapmacros.com/robots.txt")
-    if sitemap_url:
-        # Get all <loc> URLs from the first sitemap
-        loc_list = parse_sitemap_locs(sitemap_url)
-        # Iterate over the first 5 URLs (change to 100 for full test)
-        for url in loc_list[:5]:
-            print(f"\nExtracting recipe from: {url}")
-            recipe_data = extract_recipe_data(url)
-            print(recipe_data)
+    sitemap_index_url = get_sitemap_url_from_robots(target_url="https://ohsnapmacros.com/robots.txt")
+    if sitemap_index_url:
+        # Get the first post sitemap URL from the sitemap index
+        post_sitemap_url = download_sitemap_index(sitemap_index_url)
+        if post_sitemap_url:
+            # Get all <loc> URLs from the post sitemap
+            loc_list = parse_sitemap_locs(post_sitemap_url)
+            # Iterate over the first 5 URLs (change to 100 for full test)
+            for url in loc_list[:5]:
+                print(f"\nExtracting recipe from: {url}")
+                recipe_data = extract_recipe_data(url)
+                print_recipe(recipe_data)
