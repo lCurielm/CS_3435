@@ -10,6 +10,7 @@ import requests
 from protego import Protego
 from bs4 import BeautifulSoup
 import urllib.robotparser
+import json
 
 # This function orchestrates the process:
 # 1. Downloads robots.txt from the target URL.
@@ -208,16 +209,19 @@ def print_recipe(recipe):
 
 
 if __name__ == "__main__":
-    # Get the first sitemap URL from robots.txt
+    json_lines_file = "recipes.jsonl"
     sitemap_index_url = get_sitemap_url_from_robots(target_url="https://ohsnapmacros.com/robots.txt")
     if sitemap_index_url:
-        # Get the first post sitemap URL from the sitemap index
         post_sitemap_url = download_sitemap_index(sitemap_index_url)
         if post_sitemap_url:
-            # Get all <loc> URLs from the post sitemap
             loc_list = parse_sitemap_locs(post_sitemap_url)
-            # Iterate over the first 5 URLs (change to 100 for full test)
-            for url in loc_list[:5]:
+            for url in loc_list[:100]:
                 print(f"\nExtracting recipe from: {url}")
                 recipe_data = extract_recipe_data(url)
+                # Add the URL to the recipe data
+                recipe_data["url"] = url
+                # Add more keys if needed for at least 10 attributes
+                json_line = json.dumps(recipe_data)
+                with open(json_lines_file, 'a', encoding='utf-8') as fp:
+                    fp.write(json_line + '\n')
                 print_recipe(recipe_data)
