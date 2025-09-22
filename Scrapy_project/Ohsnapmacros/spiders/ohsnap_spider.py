@@ -5,10 +5,6 @@ Resources used:
 - https://docs.scrapy.org/
 - https://realpython.com/beautiful-soup-web-scraper-python/
 - Site inspected: https://ohsnapmacros.com/
-
-Additional work to exceed B (update this before submission):
-- Implemented robust fallback selectors that handle common WordPress recipe markup
-- Respects robots.txt and uses throttling and delays
 """
 from urllib.parse import urlparse
 import scrapy
@@ -19,7 +15,6 @@ class OhsnapSpider(scrapy.Spider):
     allowed_domains = ['ohsnapmacros.com']
     start_urls = ['https://ohsnapmacros.com/all-recipes/']
 
-    # Ethical defaults for the assignment; can be overridden on the CLI
     custom_settings = {
         'ROBOTSTXT_OBEY': True,
         'DOWNLOAD_DELAY': 1.0,
@@ -29,12 +24,6 @@ class OhsnapSpider(scrapy.Spider):
     }
 
     def parse(self, response):
-        """Parse an index / listing page: enqueue recipe links and follow pagination.
-
-        This improved version explicitly follows category and pagination/listing
-        pages (so we can discover many recipe pages) while filtering out admin/product
-        URLs.
-        """
         raw_links = response.css('a::attr(href)').getall()
         seen = set()
         for href in raw_links:
@@ -102,7 +91,7 @@ class OhsnapSpider(scrapy.Spider):
             'ratings': first_text(['.wprm-recipe-rating-average::text', '.rating::text', '.post-rating::text']),
         }
 
-        # Ensure we have at least 10 attributes (some may be empty strings) — add scraped timestamp
+        # Ensure we have at least 10 attributes add scraped timestamp
         item['scraped'] = response.headers.get('Date', b'').decode('utf-8') or None
 
         yield item
