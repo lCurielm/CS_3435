@@ -5,10 +5,6 @@ Resources used:
 - https://docs.scrapy.org/
 - https://realpython.com/beautiful-soup-web-scraper-python/
 - Site inspected: https://ohsnapmacros.com/
-
-Additional work to exceed B (update this before submission):
-- Implemented robust fallback selectors that handle common WordPress recipe markup
-- Respects robots.txt and uses throttling and delays
 """
 from urllib.parse import urlparse
 import scrapy

@@ -31,7 +31,7 @@ def as_dict(item: 'RecipeItem') -> Dict:
 import scrapy
 
 
-class RealEstateItem(scrapy.Item):
+class SecondSpiderItem(scrapy.Item):
     # define the fields for your item here like:
     # name = scrapy.Field()
     pass

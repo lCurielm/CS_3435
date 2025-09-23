@@ -9,7 +9,7 @@ class ValidateAndWritePipeline:
     """
 
     def open_spider(self, spider):
-        self.file = open('recipes_valid.jl', 'w', encoding='utf-8')
+        self.file = open('recipes.jl', 'w', encoding='utf-8')
 
     def close_spider(self, spider):
         self.file.close()
@@ -42,6 +42,6 @@ class ValidateAndWritePipeline:
 from itemadapter import ItemAdapter
 
 
-class RealEstatePipeline:
+class ScrapyProjectPipeline:
     def process_item(self, item, spider):
         return item
