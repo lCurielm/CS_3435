@@ -37,19 +37,6 @@ from collections import deque
 from typing import Set, List
 
 
-def is_allowed_to_crawl(base_url: str, user_agent: str = "*") -> bool:
-	rp = RobotFileParser()
-	parsed = urlparse(base_url)
-	robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
-	try:
-		rp.set_url(robots_url)
-		rp.read()
-		return rp.can_fetch(user_agent, base_url)
-	except Exception:
-		print(f"Warning: could not read robots.txt at {robots_url}; proceeding cautiously")
-		return True
-
-
 def extract_attributes(url: str, html: str, title: str) -> Dict[str, Any]:
 	soup = BeautifulSoup(html, "lxml")
 
@@ -97,7 +84,7 @@ def extract_attributes(url: str, html: str, title: str) -> Dict[str, Any]:
 	if servings:
 		data['servings'] = servings
 
-	prep_time = first_text(['.wprm-recipe-prep_time', '.prep-time', '.wprm-recipe-prep_time::text'])
+	prep_time = first_text(['.wprm-recipe-prep_time', '.prep-time'])
 	if prep_time:
 		data['prep_time'] = prep_time
 
@@ -127,17 +114,9 @@ def extract_attributes(url: str, html: str, title: str) -> Dict[str, Any]:
 
 	return data
 
-def crawl_site(start_url: str, out_file: str, max_pages: int = 100, delay: float = 1.0, headless: bool = True) -> None:
-	"""BFS crawl internal links starting from start_url until max_pages reached.
-
-	Writes one JSON object per line to out_file.
-	"""
+def crawl_site(start_url: str, out_file: str, max_pages: int = 100, delay: float = 0.5, headless: bool = True) -> None:
 	parsed_start = urlparse(start_url)
 	base_netloc = parsed_start.netloc
-
-	if not is_allowed_to_crawl(start_url):
-		print("Robots.txt disallows crawling this site. Exiting.")
-		return
 
 	visited: Set[str] = set()
 	q = deque([start_url])
@@ -157,7 +136,6 @@ def crawl_site(start_url: str, out_file: str, max_pages: int = 100, delay: float
 					WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
 				except Exception:
 					pass
-
 				try:
 					cookie_btn = driver.find_element(By.XPATH, "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'accept')]")
 					cookie_btn.click()
@@ -173,17 +151,14 @@ def crawl_site(start_url: str, out_file: str, max_pages: int = 100, delay: float
 				title = driver.title
 				html = driver.page_source
 
-				# Extract attributes (>=5)
 				attributes = extract_attributes(url, html, title)
 
-				# Write JSON line
 				outf.write(json.dumps(attributes, ensure_ascii=False) + "\n")
 				outf.flush()
 
 				visited.add(url)
 				count += 1
 
-				# Enqueue new internal links using CSS selector (example of CSS selector usage)
 				soup = BeautifulSoup(html, "lxml")
 				for a in soup.select("a[href]"):
 					href = a.get("href")
@@ -191,10 +166,8 @@ def crawl_site(start_url: str, out_file: str, max_pages: int = 100, delay: float
 						continue
 					abs_href = urljoin(url, href)
 					parsed = urlparse(abs_href)
-					# only follow same domain
 					if parsed.netloc != base_netloc:
 						continue
-					# normalize scheme/netloc/path
 					norm = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
 					if norm not in visited and norm not in q:
 						q.append(norm)
@@ -209,7 +182,6 @@ def crawl_site(start_url: str, out_file: str, max_pages: int = 100, delay: float
 
 
 def create_driver(headless: bool = True) -> webdriver.Chrome:
-	"""Create and return a Chrome webdriver instance using webdriver-manager."""
 	chrome_options = Options()
 	if headless:
 		chrome_options.add_argument("--headless=new")
@@ -217,17 +189,12 @@ def create_driver(headless: bool = True) -> webdriver.Chrome:
 	chrome_options.add_argument("--no-sandbox")
 	chrome_options.add_argument("--disable-dev-shm-usage")
 
-	# Use webdriver-manager to install the driver automatically
 	service = Service(ChromeDriverManager().install())
 	driver = webdriver.Chrome(service=service, options=chrome_options)
 	return driver
 
 
 def fetch_page(url: str, headless: bool = True, out_dir: str | Path = "screenshots", screenshot: bool = True) -> Dict[str, Any]:
-	"""Open `url`, optionally take a screenshot, and return a dict with title and HTML.
-
-	Returns: {'title': str, 'html': str, 'screenshot': <path or None>}
-	"""
 	out_dir = Path(out_dir)
 	out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -235,12 +202,9 @@ def fetch_page(url: str, headless: bool = True, out_dir: str | Path = "screensho
 	try:
 		driver.set_page_load_timeout(30)
 		driver.get(url)
-
-		# Wait briefly for dynamic content (wait for <body>)
 		try:
 			WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
 		except Exception:
-			# proceed even if wait times out
 			pass
 
 		title = driver.title
@@ -258,12 +222,7 @@ def fetch_page(url: str, headless: bool = True, out_dir: str | Path = "screensho
 
 
 def scrape_html(url: str, html: str, title: str) -> Dict[str, Any]:
-	"""Site-specific scrape for ohsnapmacros.com — returns only non-null fields."""
-	# Reuse extract_attributes implementation for consistency
 	data = extract_attributes(url, html, title)
-
-	# add scraped timestamp where available via meta or leave out
-	# (the Scrapy spider used response.headers['Date'] — with Selenium we can skip or use current time)
 	return data
 
 
