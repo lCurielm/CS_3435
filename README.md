@@ -17,8 +17,3 @@ with open(json_lines_file, 'a') as fp:
  
 The file should contain a different dictionary on each line.
  
-Make sure you don't requests.get the same URL more than once. When your program starts, you should load your JSON lines file and keep track of the URLs that have already been scraped. Then, if you encounter a URL that has already been scraped in your index, you don't need to download it, just skip it.
- 
-Test your program by running it for a few pages, then Ctrl-C to kill it. Then, run it again. It should not requests.get the same item page more than once.
- 
-Submit your Python file (not notebook) here, along with a JSON lines file (*.jl) containing at least 100 pages with at least 10 attributes each.
